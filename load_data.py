@@ -9,9 +9,40 @@ from io import BytesIO
 '''
 Moduł do wczytywania i czyszczenia danych
 '''
+def find_gios_pm25_info(year):
+    """
+    Znajduje ID i nazwę pliku dla PM2.5 z archiwum GIOS dla podanego roku.
+    """
+
+    base_url = "https://powietrze.gios.gov.pl/pjp/archives"
+    archive_prefix = "downloadFile/"
+
+    try:
+        r = requests.get(base_url)
+        r.raise_for_status()
+    except Exception as e:
+        raise RuntimeError(f"Błąd pobierania listy archiwów: {e}")
+
+    soup = BeautifulSoup(r.text, 'html.parser')
+
+    links = soup.find_all("a", href=True)
+
+    matches = []
+    for a in links:
+        href = a["href"]
+        text = a.get_text(strip=True)
+
+        if archive_prefix in href and f"Wyniki pomiarów z {year} roku" in text:
+            gios_id = href.split(archive_prefix)[-1]
+            matches.append(gios_id)
+
+    if not matches:
+        raise RuntimeError(f"Nie znaleziono archiwum PM2.5 dla roku {year}")
+
+    return matches[0]
 
 
-def download_gios_archive(year, gios_archive_url, gios_id, filename):
+def download_gios_archive(year, gios_archive_url, gios_id):
     """ Ściąganie podanego archiwum GIOS i wczytanie pliku z danymi PM2.5 do DataFrame
     Args:
         year (int): rok
@@ -31,19 +62,26 @@ def download_gios_archive(year, gios_archive_url, gios_id, filename):
     # Otwórz zip w pamięci
     with zipfile.ZipFile(io.BytesIO(response.content)) as z:
         # znajdź właściwy plik z PM2.5
-        if not filename:
-            print(f"Błąd: nie znaleziono {filename}.")
-        else:
-            # wczytaj plik do pandas
-            with z.open(filename) as f:
-                try:
-                    df = pd.read_excel(f, header=None)
-                except Exception as e:
-                    print(f"Błąd przy wczytywaniu {year}: {e}")
+        candidates = [
+            name for name in z.namelist()
+            if re.search(r"PM2?\.?5.*1g.*\.xlsx$", name, re.I)
+
+        ]
+
+        if not candidates:
+            raise RuntimeError(f"Błąd: nie znaleziono pliku PM2.5 w archiwum {year}.")
+        
+        filename = candidates[0]
+        # wczytaj plik do pandas
+        with z.open(filename) as f:
+            try:
+                df = pd.read_excel(f, header=None)
+            except Exception as e:
+                print(f"Błąd przy wczytywaniu {year}: {e}")
     return df
 
 
-def load_pm25_data(years, gios_archive_url, gios_ids, filenames):
+def load_pm25_data(years, gios_archive_url, gios_ids):
     """ Pobiera dane PM2.5 dla podanych lat z archiwum GIOS
     Args:
         years (list): lista lat do pobrania
@@ -55,7 +93,7 @@ def load_pm25_data(years, gios_archive_url, gios_ids, filenames):
     """
     data_frames = {} # słownik do przechowywania DataFrame dla każdego roku
     for year in years:
-        df = download_gios_archive(year, gios_archive_url, gios_ids[year], filenames[year])
+        df = download_gios_archive(year, gios_archive_url, gios_ids[year])
         data_frames[year] = df
 
     return data_frames
@@ -172,13 +210,10 @@ def clean_pm25_data(dfs):
         cleaned_df['Data'] = pd.to_datetime(cleaned_df['Data'])
 
         # Zamiana przecinków na kropki (jeśli plik używa przecinków jako separatora dziesiętnego, np. 2018)
-        cleaned_df = cleaned_df.replace(',', '.', regex=True).infer_objects(copy=False)
+        # tylko kolumny pomiarowe (bez daty)
+        cols = cleaned_df.columns.drop("Data")
 
-        # Konwersja kolumn stacji na typ float
-        for col in cleaned_df.columns:
-            if col != 'Data':
-                cleaned_df[col] = pd.to_numeric(cleaned_df[col], errors='coerce')
-
+        cleaned_df[cols] = (cleaned_df[cols].astype(str).apply(lambda s: s.str.replace(',', '.', regex=False)).replace('', pd.NA).astype(float))
 
         result_dfs[year] = cleaned_df
 
@@ -199,26 +234,12 @@ def replace_old_codes(dfs, old_codes):
     for year, df in dfs.items():
         changed_df = df.copy()
         stations = changed_df.columns.tolist()
-        changes = 0
-        sample_changes = []
 
         for station in stations[1:]:
             if station in old_codes:
-                new_code = old_codes[station]
-                if len(sample_changes) < 5:
-                    sample_changes.append((station, new_code))
-                
+                new_code = old_codes[station]                
                 stations[stations.index(station)] = new_code
-                changes += 1
 
-        # sanity check
-        print(f"\nRok {year} → liczba mapowań: {changes}")
-
-        # kilka przykładowych mapowań
-        if sample_changes:
-            print("\nPrzykładowe mapowania:")
-            for old, new in sample_changes:
-                print(f"    {old} → {new}")
 
         changed_df.columns = stations
         result_dfs[year] = changed_df
@@ -243,24 +264,9 @@ def correct_dates(dfs):
         cutoff = pd.Timedelta(seconds=59)
         mask_midnight = changed_df['Data'].dt.time <= (pd.Timestamp("00:00:00") + cutoff).time()
 
-        if mask_midnight.any():
-            # bierzemy pierwszy
-            idx = mask_midnight.idxmax()#bierzemy true
-            example_before = changed_df.loc[idx, 'Data']
-        else:
-            example_before = None
-
         # korekta
         changed_df.loc[mask_midnight, 'Data'] = (changed_df.loc[mask_midnight, 'Data'].dt.normalize() - pd.Timedelta(seconds=1))
 
-        # po korekcie sanity check
-        if example_before is not None:
-            example_after = changed_df.loc[idx, 'Data']
-            print(f"Przykład zmiany daty w {year}: {example_before} → {example_after}")
-        else:
-            print(f"Rok {year}: brak dat wymagających korekty\n")
-
- 
         result_dfs[year] = changed_df
         
     return result_dfs
