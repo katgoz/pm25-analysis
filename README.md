@@ -7,6 +7,10 @@ Pipeline działa inkrementalnie – jeśli wyniki dla danego roku już istnieją
 ---
 
 ## Jak uruchomić Task 4
+0. Instalacja zależności:
+```
+pip install -r requirements.txt
+```
 
 1. Skonfiguruj parametry w pliku:
 ```
@@ -190,4 +194,5 @@ Różnica:
 
 Dzięki temu pipeline jest bardziej powtarzalny i odporny na przypadkowe przebudowy.
 Ddatkowo snapshot listy PMID zapewnia deterministyczność względem zestawu analizowanych publikacji.
+
 
