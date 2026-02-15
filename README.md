@@ -114,8 +114,8 @@ Dla każdego roku:
 4. korygowane są daty,
 5. dane są łączone z metadanymi (miasta, województwa),
 6. obliczane są:
-   - **średnie miesięczne stężeń PM2.5 dla stacji**,
-   - **liczba dni z przekroczeniem normy PM2.5**.
+   - **średnie dzienne stężeń PM2.5 dla wybranych w configu miast**,
+   - **liczba dni z przekroczeniem normy PM2.5 na rok/miasto**.
 
 Wyniki zapisywane są jako:
 
@@ -130,19 +130,21 @@ Dla każdego roku:
 
 1. budowane jest zapytanie PubMed na podstawie słowa kluczowego z configu oraz filtru daty:
    `keyword AND "YEAR"[PDAT]`,
-2. wykonywane jest wyszukiwanie (`Entrez.esearch`) w celu uzyskania pełnej liczby publikacji (Count),
-3. pobierana jest tylko ograniczona liczba rekordów (`limit`) przy użyciu `Entrez.efetch`
-4. z rekordów MEDLINE wyodrębniane są metadane:
+2. Jeśli dla danego zapytania istnieje plik snapshot (zapisane PMID-y oraz total_count), pipeline wykorzystuje zapisane identyfikatory, w przeciwnym wypadku:
+- wykonywane jest wyszukiwanie (`Entrez.esearch`) w celu uzyskania pełnej liczby publikacji (Count),
+- zapisywana jest lista PMID-ów oraz total_count,
+- pobierana jest tylko ograniczona liczba rekordów (`limit`) przy użyciu `Entrez.efetch`
+3. z rekordów MEDLINE wyodrębniane są metadane:
    - PMID,
    - tytuł,
    - czasopismo,
    - autorzy,
    - abstrakt,
-5. obliczane są agregacje:
+4. obliczane są agregacje:
    - łączna liczba publikacji w roku (na podstawie pełnego Count),
    - najczęstsze czasopisma (top journals),
 
-6. generowany jest wykres słupkowy rozkładu publikacji po czasopismach.
+5. generowany jest wykres słupkowy rozkładu publikacji po czasopismach.
 Wyniki zapisywane są jako:
 
 ```
@@ -160,8 +162,8 @@ Każdy rok zapisywany jest w osobnym katalogu, dzięki czemu pipeline działa in
 results/report_{YEARS}.md
 ```
 Zawiera:
-- tabelę liczby dziennych przekroczeń PM2.5 (województwa × lata),
-- tabele miesięcznych średnich (wybrane miasta),
+- tabelę liczby dziennych przekroczeń PM2.5 (miasta × lata),
+- heatmapę dziennych średnich (wybrane miasta),
 - tabelę liczby publikacji na rok,
 - tabele top czasopism,
 - przykładowe tytuły prac,
@@ -187,4 +189,5 @@ Różnica:
 - checksum – sprawdza faktyczne zmiany danych (bezpieczniejsze i bardziej deterministyczne)
 
 Dzięki temu pipeline jest bardziej powtarzalny i odporny na przypadkowe przebudowy.
-Dodatkowo snapshot listy PMID zapewnia deterministyczność względem zestawu analizowanych publikacji.
+Ddatkowo snapshot listy PMID zapewnia deterministyczność względem zestawu analizowanych publikacji.
+
