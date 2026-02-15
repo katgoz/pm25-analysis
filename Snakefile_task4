@@ -1,0 +1,69 @@
+rerun_triggers: "checksum"
+configfile: "config/task4.yaml"
+
+YEARS = config["years"]
+YEARS_SORTED = sorted(YEARS)
+YEARS_STR = "_".join(map(str, YEARS_SORTED))
+
+rule all:
+    input:
+        expand("results/pm25/{year}/daily_means.csv", year=YEARS),
+        expand("results/pm25/{year}/exceedance_days.csv", year=YEARS),
+
+        expand("results/literature/{year}/pubmed_papers.csv", year=YEARS),
+        expand("results/literature/{year}/summary_by_year.csv", year=YEARS),
+        expand("results/literature/{year}/top_journals.csv", year=YEARS),
+        expand("results/literature/{year}/papers_by_journal.png", year=YEARS),
+
+        f"results/report/heatmap_{YEARS_STR}.png",
+        f"results/report/publications_trend_{YEARS_STR}.png",
+        f"results/report/top_words_compare_{YEARS_SORTED[0]}_{YEARS_SORTED[-1]}.png",
+        f"results/report_{YEARS_STR}.md"
+
+
+
+rule pm25_year:
+    input:
+        "src/pm25/calculations.py",
+        "src/pm25/load_data.py",
+        "src/pm25/run_pm25_year.py"
+    output:
+        "results/pm25/{year}/daily_means.csv",
+        "results/pm25/{year}/exceedance_days.csv"
+    shell:
+        "python src/pm25/run_pm25_year.py --year {wildcards.year} --config config/task4.yaml"
+
+
+rule pubmed_year:
+    input:
+        "src/literature/pubmed_fetch.py"
+
+    output:
+        "results/literature/{year}/pubmed_papers.csv",
+        "results/literature/{year}/summary_by_year.csv",
+        "results/literature/{year}/top_journals.csv",
+        "results/literature/{year}/papers_by_journal.png"
+    shell:
+        "python src/literature/pubmed_fetch.py --year {wildcards.year} --config config/task4.yaml"
+
+
+rule report_task4:
+    input:
+        "src/raport/raport.py",
+        expand("results/pm25/{year}/exceedance_days.csv", year=YEARS),
+        expand("results/pm25/{year}/daily_means.csv", year=YEARS),
+        expand("results/literature/{year}/pubmed_papers.csv", year=YEARS),
+        expand("results/literature/{year}/top_journals.csv", year=YEARS),
+        expand("results/literature/{year}/summary_by_year.csv", year=YEARS),
+        expand("results/literature/{year}/papers_by_journal.png", year=YEARS)
+
+    output:
+        f"results/report_{YEARS_STR}.md",
+        f"results/report/heatmap_{YEARS_STR}.png",
+        f"results/report/publications_trend_{YEARS_STR}.png",
+        f"results/report/top_words_compare_{YEARS_SORTED[0]}_{YEARS_SORTED[-1]}.png"
+
+
+    shell:
+        "python src/raport/raport.py --config config/task4.yaml"
+

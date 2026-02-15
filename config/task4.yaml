@@ -1,0 +1,17 @@
+years:
+  - 2021
+  - 2024
+
+cities:
+  - Warszawa
+  - Katowice
+
+pm25:
+  exceedance_limit: 20
+
+pubmed:
+  entrez_email: "ka.gozdek@student.uw.edu.pl"
+  keyword: "Particulate Matter"
+  limit: 1000
+  batch_size: 200
+  top_journals: 10
